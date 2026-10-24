@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="backend/Feynman.Api/Feynman.Api.csproj" />
+  <Project Path="backend/Feynman.Persistence.Tests/Feynman.Persistence.Tests.csproj" />
+  <Project Path="backend/Feynman.Auth.Tests/Feynman.Auth.Tests.csproj" />
+  <Project Path="backend/Feynman.Api.Tests/Feynman.Api.Tests.csproj" />
+</Solution>
