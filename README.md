@@ -1,8 +1,8 @@
-# 费曼智核 · 视频片段标注平台
+# 视频片段标注平台
 
 React / TypeScript / Vite 前端，ASP.NET Core 10 API，EF Core 10 + PostgreSQL 18。浏览器直接播放公开视频；应用不上传、下载、代理或保存视频。产品规则见 `doc/`，验收状态见 `doc/tasks/progress.md`。
 
-[个人仓库](https://github.com/HideOnBush997/feynman-core) · [实现决策、AI使用与验收报告](report.md) · [界面设计规范](design-system/feynman-core/MASTER.md)
+[个人仓库](https://github.com/HideOnBush997/video-annotation-platform) · [实现决策、AI使用与验收报告](report.md) · [界面设计规范](design-system/video-annotation-platform/MASTER.md)
 
 ## 环境与启动
 

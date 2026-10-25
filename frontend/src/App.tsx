@@ -30,7 +30,7 @@ export function Login({ initialError }: { initialError?: unknown } = {}) {
             <Activity />
           </span>
           <strong>
-            费曼智核<span>FEYNMAN CORE</span>
+            片段标注<span>VIDEO ANNOTATION</span>
           </strong>
         </div>
         <div className="login-message">
@@ -141,7 +141,7 @@ export function Login({ initialError }: { initialError?: unknown } = {}) {
           </form>
           <p className="login-note">账号由平台管理员创建。</p>
         </div>
-        <footer>费曼智核 · 视频片段标注平台</footer>
+        <footer>视频片段标注平台</footer>
       </section>
     </main>
   );
@@ -204,7 +204,7 @@ export default function App() {
             <Activity />
           </span>
           <strong>
-            费曼智核<span>FEYNMAN CORE</span>
+            片段标注<span>VIDEO ANNOTATION</span>
           </strong>
         </div>
         <div className="workspace-label">
@@ -238,7 +238,7 @@ export default function App() {
             <i />
             工作空间已连接
           </div>
-          <p>FEYNMAN CORE · 视频标注平台</p>
+          <p>VIDEO ANNOTATION PLATFORM</p>
         </div>
       </aside>
       <div className="main-shell">
@@ -283,7 +283,7 @@ export default function App() {
             />
           ) : null}
           <footer className="page-footer">
-            <span>费曼智核 · 精准视频标注</span>
+            <span>精准视频片段标注</span>
             <span>所有绝对时间按 Asia/Shanghai 展示</span>
           </footer>
         </main>

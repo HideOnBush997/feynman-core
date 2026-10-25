@@ -1,6 +1,6 @@
 # 实现决策、AI 使用与验收报告
 
-日期：2026-10-25。个人仓库：[HideOnBush997/feynman-core](https://github.com/HideOnBush997/feynman-core)。
+日期：2026-10-25。项目：视频片段标注平台。个人仓库：[HideOnBush997/video-annotation-platform](https://github.com/HideOnBush997/video-annotation-platform)。
 
 运行环境、初始化、账号获取及测试命令见 [README](README.md)。本报告补充题目没有规定的决定、验证方法及当前限制；详细接口、状态机和数据模型见 [详细设计](doc/detailed-design.md)。
 
@@ -19,7 +19,7 @@
 | 登录与密码规则 | 账号由管理员创建；密码至少6位，可用纯数字或字母，新账号直接进入工作台。这是后续明确确认的产品决定，取代早期设计里的首次强制改密。原数据库标记保留兼容，但不再拦截使用。 |
 | 分页如何影响统计 | 汇总按全部筛选结果计算，任务和片段明细按页显示，在同一数据库快照读取，翻页不改变总量。账号/租户停用后保留关联与历史结果。 |
 
-界面以高频标注为中心：视频、片段和时间输入放在同一工作区；可用当前位置填起止点；每次片段保存独立落库，最终提交再确认；提交后隐藏编辑控件。任务支持搜索、卡片/列表切换，窄屏上下排列，弹窗支持键盘聚焦、Tab循环和Esc退出。设计规范见 [MASTER.md](design-system/feynman-core/MASTER.md)。
+界面以高频标注为中心：视频、片段和时间输入放在同一工作区；可用当前位置填起止点；每次片段保存独立落库，最终提交再确认；提交后隐藏编辑控件。任务支持搜索、卡片/列表切换，窄屏上下排列，弹窗支持键盘聚焦、Tab循环和Esc退出。设计规范见 [MASTER.md](design-system/video-annotation-platform/MASTER.md)。
 
 ## 如何确认 AI 写出的代码正确
 
