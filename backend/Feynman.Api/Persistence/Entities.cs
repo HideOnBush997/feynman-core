@@ -34,7 +34,7 @@ public sealed class ApplicationUser : IdentityUser<Guid>
     public Guid? TenantId { get; set; }
     public Tenant? Tenant { get; set; }
     public bool IsActive { get; set; } = true;
-    public bool MustChangePassword { get; set; } = true;
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     public DateTime? DeactivatedAtUtc { get; set; }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Users, Building2 } from "lucide-react";
+import { Plus, Users, Building2, Search } from "lucide-react";
 import { api, query } from "./api";
 import { useOptions, useResource } from "./hooks";
 import type { Page, Tenant, User } from "./types";
@@ -41,9 +41,7 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
             },
       );
       setCreating(false);
-      setMessage(
-        tenantMode ? "租户已创建" : "账号已创建，首次登录需修改临时密码",
-      );
+      setMessage(tenantMode ? "租户已创建" : "账号已创建");
       setRevision((r) => r + 1);
     } catch (e) {
       setError(e);
@@ -95,16 +93,19 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
           {message}
         </p>
       )}
-      <div className="filters">
-        <input
-          aria-label={tenantMode ? "搜索租户" : "搜索账号"}
-          placeholder={tenantMode ? "搜索租户名称…" : "搜索用户名…"}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
+      <div className="filters management-filters">
+        <label className="search-input">
+          <Search size={18} aria-hidden="true" />
+          <input
+            aria-label={tenantMode ? "搜索租户" : "搜索账号"}
+            placeholder={tenantMode ? "搜索租户名称…" : "搜索用户名…"}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
         <select
           aria-label="启停状态"
           value={active}
@@ -182,7 +183,6 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
                   <tr key={item.id}>
                     <td>
                       <strong>{tenantMode ? item.name : item.username}</strong>
-                      <small className="id">{item.id}</small>
                     </td>
                     {!tenantMode && (
                       <>
@@ -192,9 +192,11 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
                             : "标注员"}
                         </td>
                         <td>
-                          {tenants.data?.items.find(
-                            (t) => t.id === item.tenantId,
-                          )?.name || "—"}
+                          {item.tenantName ||
+                            tenants.data?.items.find(
+                              (t) => t.id === item.tenantId,
+                            )?.name ||
+                            "—"}
                         </td>
                       </>
                     )}
@@ -288,7 +290,7 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
                     </select>
                   </Field>
                 )}
-                <Field label="临时密码">
+                <Field label="密码">
                   <input
                     name="temporaryPassword"
                     type="password"
@@ -297,9 +299,7 @@ export function Management({ kind }: { kind: "tenants" | "users" }) {
                     autoComplete="new-password"
                   />
                 </Field>
-                <p className="hint">
-                  至少 6 位，包含大写、小写、数字和符号。首次登录必须修改。
-                </p>
+                <p className="hint">密码至少 6 位，可使用纯数字或字母。</p>
               </>
             )}
             <button className="primary full" disabled={busy}>

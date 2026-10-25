@@ -83,7 +83,7 @@ public sealed class AuthDatabaseTests : IAsyncLifetime
     {
         var context = Request();
         var response = await Call(s => s.LoginAsync(new(" AUTH.ADMIN ", "Temporary_2026!"), context, default));
-        Assert.True(response.User.MustChangePassword);
+        Assert.False(response.User.MustChangePassword);
         Assert.Equal(clock.GetUtcNow().UtcDateTime.AddMinutes(15), response.ExpiresAtUtc);
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(response.AccessToken);
         Assert.Equal(900, jwt.Payload.Expiration - jwt.Payload.NotBefore);
@@ -166,7 +166,7 @@ public sealed class AuthDatabaseTests : IAsyncLifetime
         Assert.Equal("account_disabled", (await Assert.ThrowsAsync<AppException>(() => Call(s => s.RefreshAsync(Request(cookies), default)))).Code);
     }
     [Fact]
-    public async Task FirstPasswordChangeUsesIdentityRulesRevokesOtherSessionsAndLogoutIsIdempotent()
+    public async Task PasswordChangeRevokesOtherSessionsAndLogoutIsIdempotent()
     {
         var oldCookies = Cookies(await Login());
         var context = Request();

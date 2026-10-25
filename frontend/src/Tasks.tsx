@@ -1,5 +1,18 @@
 import { useState } from "react";
-import { ArrowUpRight, Plus, RefreshCw } from "lucide-react";
+import {
+  ArrowUpRight,
+  ArrowLeft,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  LayoutGrid,
+  List,
+  Film,
+  Building2,
+  Clock3,
+  ChevronDown,
+} from "lucide-react";
 import { api, query } from "./api";
 import { useOptions, useResource } from "./hooks";
 import type { Page, Task, Tenant, User, TaskStatus } from "./types";
@@ -29,7 +42,7 @@ export function TaskForm({
     if (!value) return "";
     return new Date(new Date(value).getTime() + 8 * 3600000)
       .toISOString()
-      .slice(0, 16);
+      .slice(0, 19);
   }
   return (
     <form
@@ -45,7 +58,9 @@ export function TaskForm({
             videoUrl: form.get("videoUrl"),
             instructions: form.get("instructions"),
             dueAtLocal: form.get("dueAtLocal")
-              ? `${form.get("dueAtLocal")}:00`
+              ? String(form.get("dueAtLocal")).length === 16
+                ? `${form.get("dueAtLocal")}:00`
+                : String(form.get("dueAtLocal")).slice(0, 19)
               : null,
             expectedVersion: task?.version,
           };
@@ -98,6 +113,7 @@ export function TaskForm({
         <input
           type="datetime-local"
           name="dueAtLocal"
+          step="1"
           defaultValue={localDate(task?.dueAtUtc || null)}
         />
       </Field>
@@ -111,6 +127,7 @@ export function TaskForm({
 export function Tasks({ user }: { user: User }) {
   const admin = user.role === "PlatformAdmin";
   const [tab, setTab] = useState("available");
+  const [view, setView] = useState<"grid" | "list">("grid");
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [filters, setFilters] = useState({
@@ -133,8 +150,17 @@ export function Tasks({ user }: { user: User }) {
     admin ? "/users?role=Annotator" : null,
     revision,
   );
-  const path = `/tasks${admin ? "" : `/${tab}`}${query({ ...filters, page, dueFromUtc: dueFrom ? new Date(`${dueFrom}+08:00`).toISOString() : undefined, dueToUtc: dueTo ? new Date(`${dueTo}+08:00`).toISOString() : undefined })}`;
+  const path = `/tasks${admin ? "" : `/${tab}`}${query({ ...filters, status: admin || tab === "mine" ? filters.status : undefined, page, dueFromUtc: dueFrom ? new Date(`${dueFrom}+08:00`).toISOString() : undefined, dueToUtc: dueTo ? new Date(`${dueTo}+08:00`).toISOString() : undefined })}`;
   const list = useResource<Page<Task>>(path, revision);
+  const filtered = !!(
+    filters.name ||
+    ((admin || tab === "mine") && filters.status) ||
+    filters.tenantId ||
+    filters.overdue ||
+    dueFrom ||
+    dueTo ||
+    filters.sort !== "createdAtUtc"
+  );
   const reload = () => setRevision((r) => r + 1);
   async function detail(task: Task) {
     setError(undefined);
@@ -277,136 +303,206 @@ export function Tasks({ user }: { user: User }) {
           {message}
         </p>
       )}
-      <form
-        className="filters"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setPage(1);
-          reload();
-        }}
-      >
-        <input
-          aria-label="搜索任务"
-          placeholder="搜索任务名称…"
-          value={filters.name}
-          onChange={(e) => {
-            setFilters({ ...filters, name: e.target.value });
+      <div className="filter-panel">
+        <form
+          className="filters"
+          onSubmit={(e) => {
+            e.preventDefault();
             setPage(1);
+            reload();
           }}
-        />
-        {(admin || tab === "mine") && (
-          <select
-            aria-label="任务状态"
-            value={filters.status}
-            onChange={(e) => {
-              setFilters({ ...filters, status: e.target.value });
-              setPage(1);
-            }}
-          >
-            <option value="">全部状态</option>
-            {Object.entries(statuses)
-              .filter(
-                ([k]) =>
-                  admin || ["Claimed", "Correction", "Submitted"].includes(k),
-              )
-              .map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
+        >
+          <label className="search-input">
+            <Search size={18} aria-hidden="true" />
+            <input
+              aria-label="搜索任务"
+              placeholder="搜索任务名称…"
+              value={filters.name}
+              onChange={(e) => {
+                setFilters({ ...filters, name: e.target.value });
+                setPage(1);
+              }}
+            />
+          </label>
+          {(admin || tab === "mine") && (
+            <select
+              aria-label="任务状态"
+              value={filters.status}
+              onChange={(e) => {
+                setFilters({ ...filters, status: e.target.value });
+                setPage(1);
+              }}
+            >
+              <option value="">全部状态</option>
+              {Object.entries(statuses)
+                .filter(
+                  ([k]) =>
+                    admin || ["Claimed", "Correction", "Submitted"].includes(k),
+                )
+                .map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+            </select>
+          )}
+          {admin && (
+            <select
+              aria-label="筛选租户"
+              value={filters.tenantId}
+              onChange={(e) => {
+                setFilters({ ...filters, tenantId: e.target.value });
+                setPage(1);
+              }}
+            >
+              <option value="">全部租户</option>
+              {tenants.data?.items.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
-          </select>
-        )}
-        {admin && (
+            </select>
+          )}
           <select
-            aria-label="筛选租户"
-            value={filters.tenantId}
+            aria-label="逾期筛选"
+            value={filters.overdue}
             onChange={(e) => {
-              setFilters({ ...filters, tenantId: e.target.value });
+              setFilters({ ...filters, overdue: e.target.value });
               setPage(1);
             }}
           >
-            <option value="">全部租户</option>
-            {tenants.data?.items.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            <option value="">全部截止状态</option>
+            <option value="true">已逾期</option>
+            <option value="false">未逾期</option>
           </select>
-        )}
-        <select
-          aria-label="逾期筛选"
-          value={filters.overdue}
-          onChange={(e) => {
-            setFilters({ ...filters, overdue: e.target.value });
-            setPage(1);
-          }}
-        >
-          <option value="">全部截止状态</option>
-          <option value="true">已逾期</option>
-          <option value="false">未逾期</option>
-        </select>
-        <select
-          aria-label="任务排序"
-          value={filters.sort}
-          onChange={(e) => {
-            setFilters({ ...filters, sort: e.target.value });
-            setPage(1);
-          }}
-        >
-          <option value="createdAtUtc">最新创建</option>
-          <option value="dueAtUtc">截止时间优先</option>
-          <option value="name">任务名称</option>
-        </select>
-        <button type="submit" aria-label="刷新任务">
-          <RefreshCw size={16} />
-        </button>
-      </form>
-      {admin && (
-        <div className="filters date-filters">
-          <Field label="截止时间起（Shanghai）">
-            <input
-              type="datetime-local"
-              value={dueFrom}
-              onChange={(e) => {
-                setDueFrom(e.target.value);
+          <select
+            aria-label="任务排序"
+            value={filters.sort}
+            onChange={(e) => {
+              setFilters({ ...filters, sort: e.target.value });
+              setPage(1);
+            }}
+          >
+            <option value="createdAtUtc">最新创建</option>
+            <option value="dueAtUtc">截止时间优先</option>
+            <option value="name">任务名称</option>
+          </select>
+          <button type="submit" aria-label="刷新任务" title="刷新任务">
+            <RefreshCw size={16} />
+          </button>
+        </form>
+        <div className="filter-secondary">
+          {admin && (
+            <details className="advanced-filters">
+              <summary>
+                <SlidersHorizontal size={15} aria-hidden="true" />
+                截止时间筛选
+                {(dueFrom || dueTo) && (
+                  <span className="filter-indicator">已设置</span>
+                )}
+                <ChevronDown size={14} aria-hidden="true" />
+              </summary>
+              <div className="date-filters">
+                <Field label="截止时间起（北京时间）">
+                  <input
+                    type="datetime-local"
+                    value={dueFrom}
+                    onChange={(e) => {
+                      setDueFrom(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </Field>
+                <Field label="截止时间止（不含，北京时间）">
+                  <input
+                    type="datetime-local"
+                    value={dueTo}
+                    onChange={(e) => {
+                      setDueTo(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </Field>
+              </div>
+            </details>
+          )}
+          {filtered && (
+            <button
+              className="reset-filters"
+              onClick={() => {
+                setFilters({
+                  name: "",
+                  status: "",
+                  tenantId: "",
+                  overdue: "",
+                  sort: "createdAtUtc",
+                });
+                setDueFrom("");
+                setDueTo("");
                 setPage(1);
               }}
-            />
-          </Field>
-          <Field label="截止时间止（不含，Shanghai）">
-            <input
-              type="datetime-local"
-              value={dueTo}
-              onChange={(e) => {
-                setDueTo(e.target.value);
-                setPage(1);
-              }}
-            />
-          </Field>
+            >
+              清除筛选
+            </button>
+          )}
         </div>
-      )}
+      </div>
       <section className="panel">
         <div className="panel-title">
           <h3>
+            <Film size={18} aria-hidden="true" />
             {admin
               ? "全部任务"
               : tab === "available"
                 ? "等待你的下一次发现"
                 : "我的标注任务"}
           </h3>
-          <span>{list.data?.totalItems || 0} 个任务</span>
+          <div className="list-tools">
+            <span className="result-count">
+              {list.data ? `${list.data.totalItems} 个任务` : "加载中"}
+            </span>
+            <div className="view-toggle" role="group" aria-label="任务视图">
+              <button
+                aria-label="卡片视图"
+                title="卡片视图"
+                aria-pressed={view === "grid"}
+                onClick={() => setView("grid")}
+              >
+                <LayoutGrid size={17} />
+              </button>
+              <button
+                aria-label="列表视图"
+                title="列表视图"
+                aria-pressed={view === "list"}
+                onClick={() => setView("list")}
+              >
+                <List size={18} />
+              </button>
+            </div>
+          </div>
         </div>
         {list.loading ? (
           <p className="loading" role="status">
             正在加载任务…
           </p>
         ) : !list.data?.items.length ? (
-          <Empty />
+          <Empty
+            hint={
+              filtered
+                ? "调整或清除筛选条件，找到你需要的任务。"
+                : admin
+                  ? "点击「创建任务」，开始安排团队的标注工作。"
+                  : "暂时没有任务，稍后再来看看。"
+            }
+          />
         ) : (
-          <div className="task-grid">
+          <div className={`task-grid ${view === "list" ? "list-view" : ""}`}>
             {list.data.items.map((task) => (
               <article className="task-card" key={task.id}>
                 <div className="card-top">
+                  <span className="task-type">
+                    <Film size={20} aria-hidden="true" />
+                  </span>
                   <Badge status={task.status} />
                   {task.isOverdue && <span className="overdue">逾期</span>}
                 </div>
@@ -419,15 +515,22 @@ export function Tasks({ user }: { user: User }) {
                 </p>
                 <div className="task-meta">
                   <span>
+                    <Building2 size={14} aria-hidden="true" />
                     {task.tenantName ||
                       tenants.data?.items.find((t) => t.id === task.tenantId)
                         ?.name ||
                       "所属租户任务"}
                   </span>
-                  <span>{shanghai(task.dueAtUtc)}</span>
+                  <span>
+                    <Clock3 size={14} aria-hidden="true" />
+                    {shanghai(task.dueAtUtc)}
+                  </span>
                 </div>
                 <div className="card-actions">
-                  <button onClick={() => detail(task)}>打开任务</button>
+                  <button className="open-task" onClick={() => detail(task)}>
+                    打开任务
+                    <ArrowUpRight size={15} aria-hidden="true" />
+                  </button>
                   {actions(task)}
                 </div>
               </article>
@@ -457,7 +560,7 @@ export function Tasks({ user }: { user: User }) {
           <section className="detail-sheet">
             <div className="detail-toolbar">
               <button onClick={() => setSelected(undefined)}>
-                ← 返回任务列表
+                <ArrowLeft size={17} aria-hidden="true" /> 返回任务列表
               </button>
               <div className="inline-actions">{actions(selected)}</div>
             </div>

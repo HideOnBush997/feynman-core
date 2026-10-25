@@ -15,8 +15,28 @@ export function VideoPlayer({
   videoRef: React.RefObject<HTMLVideoElement | null>;
 }) {
   const [known, setKnown] = useState(false);
+  const [metadataRead, setMetadataRead] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    setKnown(false);
+    setMetadataRead(false);
+    setFailed(false);
+    setTimedOut(false);
+    onDuration(undefined);
+    onPosition(0);
+    loadTimer.current = setTimeout(() => setTimedOut(true), 20000);
+    return () => clearTimeout(loadTimer.current);
+  }, [url, attempt, onDuration, onPosition]);
   const metadata = (video: HTMLVideoElement) => {
+    setMetadataRead(true);
+    clearTimeout(loadTimer.current);
+    setFailed(false);
+    setTimedOut(false);
     const ms =
       Number.isFinite(video.duration) && video.duration > 0
         ? Math.round(video.duration * 1000)
@@ -28,7 +48,7 @@ export function VideoPlayer({
     <div className="player">
       <video
         ref={videoRef}
-        key={url}
+        key={`${url}:${attempt}`}
         src={url}
         controls
         preload="metadata"
@@ -38,23 +58,53 @@ export function VideoPlayer({
           onPosition(Math.round(e.currentTarget.currentTime * 1000))
         }
         onError={() => {
+          clearTimeout(loadTimer.current);
           setFailed(true);
+          setTimedOut(false);
           setKnown(false);
           onDuration(undefined);
         }}
       />
       <div className="player-caption">
         <span>源视频 · 浏览器直接播放</span>
-        <span className={known ? "verified" : "warning"}>
-          {known ? "视频时长已读取" : "视频边界未能校验"}
+        <span
+          className={
+            known
+              ? "verified"
+              : failed || timedOut || metadataRead
+                ? "warning"
+                : "muted"
+          }
+        >
+          {known
+            ? "视频时长已读取"
+            : failed || timedOut || metadataRead
+              ? "视频时长暂不可用"
+              : "正在读取视频…"}
         </span>
       </div>
-      {!known && (
-        <p className="notice warning">
-          {failed ? "视频播放失败。" : ""}
-          无法获取视频总时长（video_duration_unavailable），可继续标注；仍校验正长度、重复和重叠。
+      {!known && (failed || timedOut || metadataRead) ? (
+        <p className="notice warning" role="status">
+          {failed
+            ? "视频播放失败，请检查视频地址、网络或浏览器支持的格式。"
+            : timedOut
+              ? "视频加载超时，请检查网络或代理设置后重试。"
+              : ""}
+          暂时无法读取视频总时长，可继续标注。片段仍需满足起点早于终点，且不能重复或重叠。
         </p>
-      )}
+      ) : !known ? (
+        <p className="notice" role="status">
+          正在加载视频，请稍候…
+        </p>
+      ) : null}
+      <div className="inline-actions">
+        <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+          重试加载视频
+        </button>
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          打开源视频
+        </a>
+      </div>
     </div>
   );
 }
@@ -228,7 +278,11 @@ export function Annotation({
           )}
           <div className="segment-list">
             {!segments.length && (
-              <p className="empty-inline">还没有片段，设置起止时间开始标注。</p>
+              <p className="empty-inline">
+                {locked
+                  ? "此任务暂无标注片段。"
+                  : "还没有片段，设置起止时间开始标注。"}
+              </p>
             )}
             {segments.map((s, i) => (
               <div
@@ -329,7 +383,7 @@ export function Annotation({
                     设为终点
                   </button>
                 </div>
-                <button className="primary full" disabled={busy}>
+                <button className="secondary full" disabled={busy}>
                   <Plus size={16} />
                   {busy ? "保存中…" : editing ? "保存修改" : "添加片段"}
                 </button>

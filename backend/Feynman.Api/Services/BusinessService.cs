@@ -19,7 +19,6 @@ public sealed class BusinessService(AppDbContext db, UserManager<ApplicationUser
         if (!user.IsActive) throw new AppException(403, "account_disabled", "账号已停用。");
         if (user.TenantId is Guid tenantId && !await db.Tenants.AnyAsync(t => t.Id == tenantId && t.IsActive))
             throw new AppException(403, "tenant_disabled", "租户已停用。");
-        if (user.MustChangePassword) throw new AppException(403, "password_change_required", "请先修改临时密码。");
         if (admin && user.Role != "PlatformAdmin") throw new AppException(403, "role_forbidden", "需要管理员权限。");
         return user;
     }
@@ -43,6 +42,13 @@ public sealed class BusinessService(AppDbContext db, UserManager<ApplicationUser
             throw new AppException(400, "invalid_pagination", "page ≥ 1，pageSize 范围为 1–100。");
         return (page, size);
     }
+    public static Guid? GuidFilter(HttpContext http, string key)
+    {
+        var value = http.Request.Query[key].FirstOrDefault();
+        if (string.IsNullOrEmpty(value)) return null;
+        if (!Guid.TryParse(value, out var id)) throw new AppException(400, "validation_failed", $"{key} 必须为有效的 UUID。");
+        return id;
+    }
     private static async Task<PagedResult<T>> Page<T>(IQueryable<T> query, HttpContext http)
     {
         var (page, size) = Pagination(http);
@@ -62,6 +68,8 @@ public sealed class BusinessService(AppDbContext db, UserManager<ApplicationUser
     {
         await Actor(h, true);
         var q = db.Tenants.AsNoTracking().AsQueryable();
+        if (h.Request.Query["optionsOnly"] == "true")
+            q = q.Where(t => t.IsActive || db.Tasks.Any(task => task.TenantId == t.Id));
         if (h.Request.Query["name"].FirstOrDefault() is { Length: > 0 } name) q = q.Where(t => t.Name.Contains(name));
         if (bool.TryParse(h.Request.Query["isActive"], out var active)) q = q.Where(t => t.IsActive == active);
         return await Page(q.OrderBy(t => t.CreatedAtUtc).ThenBy(t => t.Id), h);
@@ -89,17 +97,29 @@ public sealed class BusinessService(AppDbContext db, UserManager<ApplicationUser
             .ExecuteUpdateAsync(s => s.SetProperty(f => f.RevokedAtUtc, DateTime.UtcNow));
         await db.SaveChangesAsync(); await tx.CommitAsync(); return tenant;
     }
-    private static object UserDto(ApplicationUser u) => new { u.Id, Username = u.UserName, u.Role, u.TenantId, u.IsActive, u.MustChangePassword, u.CreatedAtUtc };
+    private static object UserDto(ApplicationUser u) => new { u.Id, Username = u.UserName, u.Role, u.TenantId, u.IsActive, MustChangePassword = false, u.CreatedAtUtc };
     public async Task<object> Accounts(HttpContext h)
     {
         await Actor(h, true);
         var q = db.Users.AsNoTracking().AsQueryable();
+        if (h.Request.Query["optionsOnly"] == "true")
+            q = q.Where(u => (u.IsActive && (u.TenantId == null || u.Tenant!.IsActive)) ||
+                db.Tasks.Any(task => task.AssigneeUserId == u.Id || task.LatestSubmitterUserId == u.Id));
         if (h.Request.Query["username"].FirstOrDefault() is { Length: > 0 } name) q = q.Where(u => u.UserName!.Contains(name));
         if (h.Request.Query["role"].FirstOrDefault() is { Length: > 0 } role) q = q.Where(u => u.Role == role);
-        if (Guid.TryParse(h.Request.Query["tenantId"], out var tenant)) q = q.Where(u => u.TenantId == tenant);
+        if (GuidFilter(h, "tenantId") is Guid tenant) q = q.Where(u => u.TenantId == tenant);
         if (bool.TryParse(h.Request.Query["isActive"], out var active)) q = q.Where(u => u.IsActive == active);
-        var page = await Page(q.OrderBy(u => u.CreatedAtUtc).ThenBy(u => u.Id), h);
-        return new { Items = page.Items.Select(UserDto), page.Page, page.PageSize, page.TotalItems, page.TotalPages };
+        return await Page(q.OrderBy(u => u.CreatedAtUtc).ThenBy(u => u.Id).Select(u => new
+        {
+            u.Id,
+            Username = u.UserName,
+            u.Role,
+            u.TenantId,
+            TenantName = u.Tenant == null ? null : u.Tenant.Name,
+            u.IsActive,
+            MustChangePassword = false,
+            u.CreatedAtUtc
+        }), h);
     }
     public async Task<object> CreateAccount(HttpContext h, UserInput input)
     {
@@ -119,7 +139,7 @@ public sealed class BusinessService(AppDbContext db, UserManager<ApplicationUser
             Role = input.Role,
             TenantId = input.TenantId,
             IsActive = true,
-            MustChangePassword = true,
+            MustChangePassword = false,
             CreatedAtUtc = DateTime.UtcNow
         };
         var result = await users.CreateAsync(user, input.TemporaryPassword ?? "");

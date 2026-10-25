@@ -1,11 +1,18 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, it, expect } from "vitest";
-import App, { Login, PasswordChange } from "./App";
+import App, { Login } from "./App";
 import { Management } from "./Management";
-import { Tasks } from "./Tasks";
+import { TaskForm, Tasks } from "./Tasks";
 import { Statistics } from "./Statistics";
-import { api, sessionStore } from "./api";
+import { api, ApiError, sessionStore } from "./api";
+import { ErrorMessage } from "./ui";
 import type { Task, User } from "./types";
 const user: User = {
   id: "u",
@@ -37,6 +44,137 @@ const page = (items: unknown[]) => ({
   pageSize: 20,
   totalItems: items.length,
   totalPages: items.length ? 1 : 0,
+});
+
+it.each(["tenant", "date"])(
+  "does not show stale statistics after a %s filter fails and can retry",
+  async (filter) => {
+    let fail = true;
+    vi.spyOn(api, "get").mockImplementation(async (path) => {
+      if (path.startsWith("/tenants"))
+        return page([
+          { id: "a", name: "团队 A" },
+          { id: "b", name: "团队 B" },
+        ]);
+      if (path.startsWith("/users")) return page([]);
+      const params = new URLSearchParams(path.split("?")[1]);
+      const changed =
+        filter === "tenant"
+          ? params.get("tenantId") === "b"
+          : params.get("toDate") === "2030-01-01";
+      if (changed && fail) throw new Error("无法连接服务");
+      return changed
+        ? { ...page([]), totalDurationMs: 0, days: [] }
+        : {
+            ...page([task]),
+            totalDurationMs: 3000,
+            days: [
+              {
+                date: "2026-10-25",
+                durationMs: 3000,
+                tenants: [
+                  {
+                    tenantId: "a",
+                    tenantName: "先前明细租户",
+                    durationMs: 3000,
+                    annotators: [],
+                  },
+                ],
+              },
+            ],
+          };
+    });
+    const { container } = render(<Statistics />);
+    await waitFor(() =>
+      expect(
+        container.querySelector(".metric.dark > strong"),
+      ).toHaveTextContent("00:00:03.000"),
+    );
+    if (filter === "tenant")
+      await userEvent.selectOptions(
+        screen.getByLabelText("租户", { exact: true }),
+        "b",
+      );
+    else
+      fireEvent.change(screen.getByLabelText("结束日期"), {
+        target: { value: "2030-01-01" },
+      });
+    await screen.findByRole("alert");
+    expect(container.querySelector(".metric.dark > strong")).toHaveTextContent(
+      "—",
+    );
+    expect(screen.queryByText("先前明细租户")).not.toBeInTheDocument();
+    expect(screen.queryByText("所选日期暂无有效提交")).not.toBeInTheDocument();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "重试查询" }));
+    await screen.findByText("所选日期暂无有效提交");
+    expect(container.querySelector(".metric.dark > strong")).toHaveTextContent(
+      "00:00:00.000",
+    );
+  },
+);
+
+it.each([
+  [
+    "username_conflict",
+    "Username already taken",
+    "用户名已存在，请更换用户名。",
+  ],
+  [
+    "segment_overlap",
+    "片段不能重叠，首尾相接允许。",
+    "片段不能重叠，首尾相接允许。",
+  ],
+  ["concurrency_conflict", "Conflict", "状态已变化，请刷新后重试"],
+])("explains the actual %s conflict", (code, detail, expected) => {
+  render(
+    <ErrorMessage
+      error={new ApiError({ status: 409, code, title: code, detail })}
+    />,
+  );
+  expect(screen.getByRole("alert")).toHaveTextContent(expected);
+});
+
+it("keeps the tenant name of accounts whose inactive tenant is absent from selector options", async () => {
+  vi.spyOn(api, "get").mockImplementation(async (path) =>
+    path.startsWith("/tenants")
+      ? page([])
+      : page([
+          {
+            ...user,
+            role: "Annotator",
+            tenantId: "inactive",
+            tenantName: "已停用无任务团队",
+          },
+        ]),
+  );
+  render(<Management kind="users" />);
+  expect(
+    await screen.findByRole("cell", { name: "已停用无任务团队" }),
+  ).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "创建账号" }));
+  expect(
+    within(screen.getByRole("dialog")).queryByRole("option", {
+      name: "已停用无任务团队",
+    }),
+  ).not.toBeInTheDocument();
+});
+it("preserves deadline seconds when saving an existing draft", async () => {
+  const patch = vi.spyOn(api, "patch").mockResolvedValue(task);
+  render(
+    <TaskForm
+      task={{ ...task, dueAtUtc: "2026-10-24T00:15:37Z" }}
+      tenants={[
+        { id: "t", name: "团队", isActive: true } as import("./types").Tenant,
+      ]}
+      onSaved={() => {}}
+    />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+  expect(patch).toHaveBeenCalledWith(
+    "/tasks/task",
+    expect.objectContaining({ dueAtLocal: "2026-10-24T08:15:37" }),
+  );
 });
 it("restoration network failure stays visible on login", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
@@ -73,7 +211,65 @@ function mockLists(tasks: Task[] = []) {
           : page(tasks),
   );
 }
-it("login presents errors and first-password state from server", async () => {
+it("does not apply a hidden mine-status filter to available tasks", async () => {
+  mockLists();
+  render(<Tasks user={{ ...user, role: "Annotator", tenantId: "t" }} />);
+  await userEvent.click(screen.getByRole("button", { name: "我的任务" }));
+  await userEvent.selectOptions(screen.getByLabelText("任务状态"), "Submitted");
+  await userEvent.click(screen.getByRole("button", { name: "可领取任务" }));
+  await waitFor(() => {
+    const paths = vi.mocked(api.get).mock.calls.map(([path]) => path);
+    const last = paths
+      .filter((path) => path.startsWith("/tasks/available"))
+      .at(-1)!;
+    expect(new URLSearchParams(last.split("?")[1]).has("status")).toBe(false);
+  });
+});
+it("login updates the active session", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          accessToken: "token",
+          expiresAtUtc: "2030-01-01",
+          user,
+        }),
+      ),
+    ),
+  );
+  render(<Login />);
+  await userEvent.type(screen.getByLabelText("用户名"), "admin");
+  await userEvent.type(screen.getByLabelText("密码"), "Test1!");
+  await userEvent.click(screen.getByRole("button", { name: "进入工作台" }));
+  await waitFor(() => expect(sessionStore.get()?.user.id).toBe(user.id));
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/v1/auth/login",
+    expect.objectContaining({ credentials: "include" }),
+  );
+});
+it("login shows only the friendly error without diagnostic fields", () => {
+  render(
+    <Login
+      initialError={
+        new ApiError({
+          title: "invalid_credentials",
+          detail: "用户名或密码错误。",
+          code: "invalid_credentials",
+          status: 401,
+          traceId: "internal-trace",
+          errors: { request: ["用户名或密码错误。"] },
+        })
+      }
+    />,
+  );
+  expect(screen.getByRole("alert").textContent).toBe("用户名或密码错误。");
+  expect(
+    screen.queryByText(/invalid_credentials|internal-trace|追踪编号|request:/),
+  ).not.toBeInTheDocument();
+});
+it("restored legacy password flags do not interrupt the workspace", async () => {
+  mockLists();
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
@@ -86,27 +282,11 @@ it("login presents errors and first-password state from server", async () => {
       ),
     ),
   );
-  render(<Login />);
-  await userEvent.type(screen.getByLabelText("用户名"), "admin");
-  await userEvent.type(screen.getByLabelText("密码"), "Test1!");
-  await userEvent.click(screen.getByRole("button", { name: "进入工作台" }));
-  await waitFor(() =>
-    expect(sessionStore.get()?.user.mustChangePassword).toBe(true),
-  );
-  expect(fetch).toHaveBeenCalledWith(
-    "/api/v1/auth/login",
-    expect.objectContaining({ credentials: "include" }),
-  );
-});
-it("password confirmation prevents mismatching submission", async () => {
-  vi.stubGlobal("fetch", vi.fn());
-  render(<PasswordChange />);
-  await userEvent.type(screen.getByLabelText("当前临时密码"), "Old1!x");
-  await userEvent.type(screen.getByLabelText("新密码"), "New1!x");
-  await userEvent.type(screen.getByLabelText("确认新密码"), "New2!x");
-  await userEvent.click(screen.getByRole("button", { name: "更新密码并继续" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("不一致");
-  expect(fetch).not.toHaveBeenCalled();
+  render(<App />);
+  expect(
+    await screen.findByRole("heading", { name: "任务管理" }),
+  ).toBeVisible();
+  expect(screen.queryByText("设置你的新密码")).not.toBeInTheDocument();
 });
 it("admin creates tenants and deactivates with explicit confirmation", async () => {
   mockLists();
@@ -131,13 +311,16 @@ it("admin creates annotator account bound to tenant", async () => {
   const dialog = screen.getByRole("dialog");
   await userEvent.type(within(dialog).getByLabelText("用户名"), "新标注员");
   await userEvent.selectOptions(within(dialog).getByLabelText("所属租户"), "t");
-  await userEvent.type(screen.getByLabelText("临时密码"), "Temp123!");
+  await userEvent.type(
+    screen.getByLabelText("密码", { exact: true }),
+    "123456",
+  );
   await userEvent.click(screen.getByRole("button", { name: "确认创建" }));
   expect(post).toHaveBeenCalledWith("/users", {
     username: "新标注员",
     role: "Annotator",
     tenantId: "t",
-    temporaryPassword: "Temp123!",
+    temporaryPassword: "123456",
   });
 });
 it("draft creation passes Shanghai local time and publication uses server version", async () => {

@@ -24,7 +24,12 @@ public static class AuthEndpoints
             // The product deliberately permits Unicode and punctuation in globally unique usernames.
             o.User.AllowedUserNameCharacters = "";
             o.User.RequireUniqueEmail = false;
-        }).AddEntityFrameworkStores<AppDbContext>();
+            o.Password.RequiredLength = 6;
+            o.Password.RequireDigit = false;
+            o.Password.RequireLowercase = false;
+            o.Password.RequireUppercase = false;
+            o.Password.RequireNonAlphanumeric = false;
+        }).AddErrorDescriber<SimplePasswordErrors>().AddEntityFrameworkStores<AppDbContext>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
         {
             o.MapInboundClaims = false;
@@ -74,14 +79,14 @@ public sealed class ActiveUserMiddleware(RequestDelegate next)
         {
             var user = await service.GetActiveUserAsync(context, context.RequestAborted);
             context.Items[typeof(ApplicationUser)] = user;
-            var path = context.Request.Path.Value?.TrimEnd('/');
-            if (user.MustChangePassword && path?.StartsWith("/api/v1", StringComparison.OrdinalIgnoreCase) == true &&
-                !string.Equals(path, "/api/v1/auth/me", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(path, "/api/v1/auth/change-password", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(path, "/api/v1/auth/logout", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(path, "/api/v1/auth/refresh", StringComparison.OrdinalIgnoreCase))
-                throw new AppException(403, "password_change_required", "首次登录请先修改临时密码。");
         }
         await next(context);
     }
+}
+
+public sealed class SimplePasswordErrors : IdentityErrorDescriber
+{
+    public override IdentityError DuplicateUserName(string userName) => new() { Code = nameof(DuplicateUserName), Description = "用户名已存在，请更换用户名。" };
+    public override IdentityError PasswordTooShort(int length) => new() { Code = nameof(PasswordTooShort), Description = $"密码至少需要 {length} 位。" };
+    public override IdentityError PasswordMismatch() => new() { Code = nameof(PasswordMismatch), Description = "当前密码错误。" };
 }

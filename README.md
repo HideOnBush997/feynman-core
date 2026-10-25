@@ -2,6 +2,8 @@
 
 React / TypeScript / Vite 前端，ASP.NET Core 10 API，EF Core 10 + PostgreSQL 18。浏览器直接播放公开视频；应用不上传、下载、代理或保存视频。产品规则见 `doc/`，验收状态见 `doc/tasks/progress.md`。
 
+[个人仓库](https://github.com/HideOnBush997/feynman-core) · [实现决策、AI使用与验收报告](report.md) · [界面设计规范](design-system/feynman-core/MASTER.md)
+
 ## 环境与启动
 
 需要 Windows PowerShell 7、Node.js 24、.NET SDK 10、Docker Desktop Linux containers。开发端口：PostgreSQL 5432、API HTTPS 7043、前端 HTTPS 5173。端口及源站为开发配置；生产参数需另行注入。
@@ -18,7 +20,7 @@ React / TypeScript / Vite 前端，ASP.NET Core 10 API，EF Core 10 + PostgreSQL
 
 首次信任开发证书时 Windows 可能显示系统证书信任对话框。若浏览器仍显示证书错误，重新执行 `dotnet dev-certs https --trust` 并重启浏览器。
 
-演示账号默认名为 `demo.admin` 和 `demo.annotator`，首次登录必须修改密码。新环境 setup 为管理员、标注员和数据库生成独立随机口令，仅写入被忽略的本地配置。账号初始口令可在本机 `backend/Feynman.Api/appsettings.Local.json` 的 `DemoSeed` 中查看；已改密账号使用自己设置的密码。Seed 不重置已有密码、不覆盖业务数据。
+演示账号默认名为 `demo.admin` 和 `demo.annotator`，登录后直接进入工作台。账号密码只要求至少 6 位，可使用纯数字或字母。新环境 setup 为管理员、标注员和数据库生成独立随机口令，仅写入被忽略的本地配置。账号初始口令可在本机 `backend/Feynman.Api/appsettings.Local.json` 的 `DemoSeed` 中查看；已改密账号使用自己设置的密码。Seed 不重置已有密码、不覆盖业务数据。
 
 默认演示视频来自 [Diffusion Policy 官方项目](https://diffusion-policy.cs.columbia.edu/)，直链为 [Push-T 视频](https://diffusion-policy.cs.columbia.edu/videos/highlight_pusht.mp4)。2026-10-24 检查返回 HTTP 200、video/mp4 和 Accept-Ranges，大小约 5 MB。外部源不可用时页面会显示播放失败和 `video_duration_unavailable`，其他规则继续由服务器校验。
 
@@ -54,9 +56,9 @@ npx playwright install chromium
 npm run e2e
 ```
 
-E2E 使用环境变量 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 或被忽略的 `frontend/.env.e2e.local` 登录现有管理员；账号仍需首次改密时另设 `E2E_ADMIN_NEW_PASSWORD`，运行后更新本地口令。测试账号临时口令仅属于测试夹具，不用作管理员或数据库口令。具体测试与实际执行结果将在交付报告及进度文档记录。
+E2E 使用环境变量 `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD` 或被忽略的 `frontend/.env.e2e.local` 登录现有管理员；无需首次登录改密。E2E 会创建测试租户、账号和任务，应使用独立测试环境。测试账号临时口令仅属于测试夹具，不用作管理员或数据库口令。具体测试与实际执行结果见 [report.md](report.md) 及进度文档。
 
-本次验收：后端 62 项、前端组件/客户端 29 项、浏览器 E2E 2 项通过，均无跳过。后端启用编译警告视为错误，并使用 `packages.lock.json`；前端依赖使用 `package-lock.json`。可用 `dotnet restore --locked-mode` 和 `npm ci` 重现依赖。
+2026-10-25 验收：后端 70 项、前端组件/客户端 48 项、浏览器 E2E 5 项通过，均无跳过。新增回归覆盖统计筛选失败后的旧数据清理与重试、重复用户名中文提示，以及停用无任务租户后的账号归属显示。后端启用编译警告视为错误，并使用 `packages.lock.json`；前端依赖使用 `package-lock.json`。可用 `dotnet restore --locked-mode` 和 `npm ci` 重现依赖。
 
 ## 关键实现选择
 

@@ -32,6 +32,62 @@ beforeEach(() => {
   document.cookie = "feynman_csrf=csrf-value";
 });
 describe("API client and session", () => {
+  it.each([false, true])(
+    "does not retry an old request after logout or account switch (%s)",
+    async (switchAccount) => {
+      sessionStore.set(session);
+      let complete!: (response: Response) => void;
+      vi.mocked(fetch).mockReturnValueOnce(
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+      );
+      const pending = api.post("/tasks/t/submit", { expectedVersion: 1 });
+      sessionStore.set(
+        switchAccount
+          ? {
+              ...session,
+              accessToken: "other-token",
+              user: { ...session.user, id: "other-user" },
+            }
+          : null,
+      );
+      vi.mocked(fetch).mockResolvedValue(json(session));
+      complete(json({ code: "token_expired" }, 401));
+      await expect(pending).rejects.toMatchObject({
+        problem: { code: "session_changed" },
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(sessionStore.get()?.user.id).toBe(
+        switchAccount ? "other-user" : undefined,
+      );
+    },
+  );
+  it("refreshes expired access tokens for password changes", async () => {
+    sessionStore.set(session);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json({ code: "token_expired" }, 401))
+      .mockResolvedValueOnce(json({ ...session, accessToken: "refreshed" }))
+      .mockResolvedValueOnce(json({ ...session, accessToken: "changed" }));
+    await changePassword("temporary", "NewPassword1!");
+    expect(sessionStore.get()?.accessToken).toBe("changed");
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/auth/change-password",
+      "/api/v1/auth/refresh",
+      "/api/v1/auth/change-password",
+    ]);
+  });
+  it("preserves a valid refreshed session when retry is forbidden by role", async () => {
+    sessionStore.set(session);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json({ code: "token_expired" }, 401))
+      .mockResolvedValueOnce(json({ ...session, accessToken: "refreshed" }))
+      .mockResolvedValueOnce(json({ code: "role_forbidden" }, 403));
+    await expect(api.get("/tenants")).rejects.toMatchObject({
+      problem: { code: "role_forbidden" },
+    });
+    expect(sessionStore.get()?.accessToken).toBe("refreshed");
+  });
   it("encodes paging and omits empty filters", () => {
     expect(query({ page: 2, name: "视频 一", tenantId: "" })).toBe(
       "?page=2&pageSize=20&name=%E8%A7%86%E9%A2%91+%E4%B8%80",

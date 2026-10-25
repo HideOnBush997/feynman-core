@@ -6,6 +6,7 @@ import type { Statistics as StatisticsData, Page, Tenant, User } from "./types";
 import { duration, Empty, ErrorMessage, Field, Pagination, today } from "./ui";
 export function Statistics() {
   const [page, setPage] = useState(1);
+  const [revision, setRevision] = useState(0);
   const [filters, setFilters] = useState({
     fromDate: today(),
     toDate: today(),
@@ -14,6 +15,7 @@ export function Statistics() {
   });
   const data = useResource<StatisticsData>(
     `/statistics/daily${query({ ...filters, page })}`,
+    revision,
   );
   const tenants = useOptions<Tenant>("/tenants");
   const users = useOptions<User>("/users?role=Annotator");
@@ -105,13 +107,25 @@ export function Statistics() {
         </Field>
       </div>
       <ErrorMessage error={data.error || tenants.error || users.error} />
+      {!!data.error && (
+        <div className="inline-actions">
+          <button
+            type="button"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            重试查询
+          </button>
+        </div>
+      )}
       <div className="metrics">
         <article className="metric dark">
           <div>
             <Clock3 size={19} />
             <span>有效标注总时长</span>
           </div>
-          <strong>{duration(data.data?.totalDurationMs || 0)}</strong>
+          <strong>
+            {data.data ? duration(data.data.totalDurationMs) : "—"}
+          </strong>
           <small>当前已提交任务 · 毫秒精度</small>
         </article>
         <article className="metric">
@@ -120,7 +134,7 @@ export function Statistics() {
             <span>有效提交</span>
           </div>
           <strong>
-            {data.data?.totalItems || 0}
+            {data.data?.totalItems ?? "—"}
             <small> 个任务</small>
           </strong>
           <small>退回后即时移出，重新提交重新计入</small>
@@ -136,6 +150,11 @@ export function Statistics() {
         </p>
         {data.loading ? (
           <p className="loading">正在汇总…</p>
+        ) : data.error ? (
+          <Empty
+            text="统计暂时无法加载"
+            hint="请检查网络或调整筛选条件后重试。"
+          />
         ) : !data.data?.days.length ? (
           <Empty text="所选日期暂无有效提交" />
         ) : (

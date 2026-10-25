@@ -16,8 +16,8 @@ public sealed class StatisticsService(AppDbContext db, BusinessService business)
         var (start, until) = ShanghaiTime.Range(from, to); var (page, size) = BusinessService.Pagination(h);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
         var q = db.Tasks.AsNoTracking().Where(t => t.Status == TaskStates.Submitted && t.SubmittedAtUtc >= start && t.SubmittedAtUtc < until);
-        if (Guid.TryParse(h.Request.Query["tenantId"], out var tenant)) q = q.Where(t => t.TenantId == tenant);
-        if (Guid.TryParse(h.Request.Query["annotatorId"], out var user)) q = q.Where(t => t.LatestSubmitterUserId == user);
+        if (BusinessService.GuidFilter(h, "tenantId") is Guid tenant) q = q.Where(t => t.TenantId == tenant);
+        if (BusinessService.GuidFilter(h, "annotatorId") is Guid user) q = q.Where(t => t.LatestSubmitterUserId == user);
         var total = await q.LongCountAsync();
         var summaries = await q.Select(t => new
         {

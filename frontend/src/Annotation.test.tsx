@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -42,6 +43,64 @@ const segment = {
   endMs: 2000,
   durationMs: 1000,
 };
+it("reports a stalled initial load and can retry the same source", () => {
+  vi.useFakeTimers();
+  try {
+    const ref = createRef<HTMLVideoElement>();
+    const onDuration = vi.fn();
+    render(
+      <VideoPlayer
+        url={task.videoUrl}
+        onDuration={onDuration}
+        onPosition={vi.fn()}
+        videoRef={ref}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(20000));
+    expect(screen.getByText(/视频加载超时/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "打开源视频" })).toHaveAttribute(
+      "href",
+      task.videoUrl,
+    );
+    const previous = ref.current;
+    fireEvent.click(screen.getByRole("button", { name: "重试加载视频" }));
+    expect(ref.current).not.toBe(previous);
+    expect(screen.queryByText(/视频加载超时/)).not.toBeInTheDocument();
+    Object.defineProperty(ref.current, "duration", { value: 10 });
+    fireEvent.loadedMetadata(ref.current!);
+    act(() => vi.advanceTimersByTime(20000));
+    expect(screen.getByText("视频时长已读取")).toBeVisible();
+    expect(screen.queryByText(/视频加载超时/)).not.toBeInTheDocument();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("clears the previous video's duration and failure when the URL changes", () => {
+  const ref = createRef<HTMLVideoElement>();
+  const onDuration = vi.fn();
+  const onPosition = vi.fn();
+  const { rerender } = render(
+    <VideoPlayer
+      url={task.videoUrl}
+      onDuration={onDuration}
+      onPosition={onPosition}
+      videoRef={ref}
+    />,
+  );
+  Object.defineProperty(ref.current, "duration", { value: 10 });
+  fireEvent.loadedMetadata(ref.current!);
+  rerender(
+    <VideoPlayer
+      url="https://example.test/next.mp4"
+      onDuration={onDuration}
+      onPosition={onPosition}
+      videoRef={ref}
+    />,
+  );
+  expect(onDuration).toHaveBeenLastCalledWith(undefined);
+  expect(onPosition).toHaveBeenLastCalledWith(0);
+  expect(screen.queryByText("视频时长已读取")).not.toBeInTheDocument();
+});
 it("validates integer milliseconds, boundaries, overlap, duplicate, and adjacency", () => {
   expect(validateSegment(-1, 1, [], null)).toMatch(/非负/);
   expect(validateSegment(0.5, 1, [], null)).toMatch(/整数/);
@@ -65,7 +124,8 @@ it("reads finite duration in rounded milliseconds and reports playback failure",
       videoRef={ref}
     />,
   );
-  expect(screen.getByText(/video_duration_unavailable/)).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载视频");
+  expect(screen.queryByText(/暂时无法读取视频总时长/)).not.toBeInTheDocument();
   Object.defineProperty(ref.current, "duration", {
     value: 12.3456,
     configurable: true,
@@ -81,6 +141,9 @@ it("reads finite duration in rounded milliseconds and reports playback failure",
   expect(onDuration).toHaveBeenLastCalledWith(undefined);
   fireEvent.error(ref.current!);
   expect(screen.getByText(/视频播放失败/)).toBeInTheDocument();
+  expect(
+    screen.queryByText(/video_duration_unavailable/),
+  ).not.toBeInTheDocument();
 });
 it("adds, edits and deletes stable segments using current version", async () => {
   const changed = vi.fn();
@@ -186,7 +249,7 @@ it("shows server conflict and reloads resource without automatically overwriting
   render(<Annotation initialTask={task} user={user} onChanged={() => {}} />);
   await userEvent.click(screen.getByRole("button", { name: "添加片段" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "concurrency_conflict",
+    "状态已变化，请刷新后重试",
   );
   await waitFor(() => expect(get).toHaveBeenCalledWith("/tasks/task"));
   expect(await screen.findByText("当前任务仅可查看。")).toBeInTheDocument();

@@ -108,21 +108,38 @@ export async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const sentToken = session?.accessToken;
+  const sentUserId = session?.user.id;
+  const ensureSameUser = () => {
+    if (session?.user.id !== sentUserId)
+      throw new ApiError({
+        title: "会话已变化，请重新操作",
+        status: 401,
+        code: "session_changed",
+      });
+  };
   try {
     return await send<T>(path, options);
   } catch (error) {
     if (
       error instanceof ApiError &&
       error.problem.status === 401 &&
-      !path.startsWith("/auth/")
+      (!path.startsWith("/auth/") ||
+        path === "/auth/change-password" ||
+        path === "/auth/me")
     ) {
+      ensureSameUser();
       if (!session || session.accessToken === sentToken) await refreshSession();
+      if (sentUserId !== undefined) ensureSameUser();
       try {
         return await send<T>(path, options);
       } catch (retryError) {
         if (
           retryError instanceof ApiError &&
-          [401, 403].includes(retryError.problem.status)
+          (retryError.problem.status === 401 ||
+            (retryError.problem.status === 403 &&
+              ["account_disabled", "tenant_disabled"].includes(
+                retryError.problem.code,
+              )))
         )
           sessionStore.set(null);
         throw retryError;

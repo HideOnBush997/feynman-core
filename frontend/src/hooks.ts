@@ -22,7 +22,7 @@ export function useOptions<T>(path: string | null, revision = 0) {
     let alive = true;
     if (!path) return;
     setError(undefined);
-    fetchAllPages<T>(path)
+    fetchAllPages<T>(`${path}${path.includes("?") ? "&" : "?"}optionsOnly=true`)
       .then((items) => {
         if (alive) setData({ items });
       })
@@ -36,31 +36,36 @@ export function useOptions<T>(path: string | null, revision = 0) {
   return { data, error };
 }
 export function useResource<T>(path: string | null, revision = 0) {
-  const [data, setData] = useState<T>();
-  const [error, setError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<{
+    path: string | null;
+    revision: number;
+    data?: T;
+    error?: unknown;
+    loading: boolean;
+  }>({ path, revision, loading: !!path });
   useEffect(() => {
     let alive = true;
     if (!path) {
-      setLoading(false);
+      setState({ path, revision, loading: false });
       return;
     }
-    setLoading(true);
-    setError(undefined);
+    setState({ path, revision, loading: true });
     api
       .get<T>(path)
       .then((value) => {
-        if (alive) setData(value);
+        if (alive) setState({ path, revision, data: value, loading: false });
       })
       .catch((e) => {
-        if (alive) setError(e);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
+        if (alive) setState({ path, revision, error: e, loading: false });
       });
     return () => {
       alive = false;
     };
   }, [path, revision]);
-  return { data, error, loading };
+  const current = state.path === path && state.revision === revision;
+  return {
+    data: current ? state.data : undefined,
+    error: current ? state.error : undefined,
+    loading: current ? state.loading : !!path,
+  };
 }

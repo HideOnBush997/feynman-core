@@ -47,7 +47,7 @@ public static class DemoSeed
                 throw new InvalidOperationException($"Seed username '{name}' already belongs to a different role or tenant.");
             return;
         }
-        var user = new ApplicationUser { UserName = name, Role = role, TenantId = tenantId, MustChangePassword = true };
+        var user = new ApplicationUser { UserName = name, Role = role, TenantId = tenantId };
         var result = await users.CreateAsync(user, password);
         if (!result.Succeeded) throw new InvalidOperationException("Demo seed failed: " + string.Join("; ", result.Errors.Select(x => x.Description)));
     }

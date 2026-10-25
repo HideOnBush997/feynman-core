@@ -6,23 +6,21 @@ import {
   ChartNoAxesCombined,
   ClipboardList,
   LogOut,
+  Eye,
+  EyeOff,
+  Play,
+  Scissors,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import {
-  changePassword,
-  login,
-  logout,
-  refreshSession,
-  sessionStore,
-  ApiError,
-} from "./api";
+import { login, logout, refreshSession, sessionStore, ApiError } from "./api";
 import { ErrorMessage, Field } from "./ui";
 import { Tasks } from "./Tasks";
 import { Management } from "./Management";
 import { Statistics } from "./Statistics";
 export function Login({ initialError }: { initialError?: unknown } = {}) {
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<unknown>();
   return (
     <main className="login-shell">
@@ -38,22 +36,44 @@ export function Login({ initialError }: { initialError?: unknown } = {}) {
         <div className="login-message">
           <div className="eyebrow">PRECISION IN EVERY FRAME</div>
           <h1>
-            从每一帧，
+            精准每一帧，
             <br />
-            发现有价值的未来。
+            让价值清晰可见。
           </h1>
           <p>
             连接团队、视频与洞察。
             <br />
             让精准标注成为智能的起点。
           </p>
-          <div className="waveform">
-            {Array.from({ length: 40 }, (_, i) => (
-              <i
-                key={i}
-                style={{ height: `${20 + Math.sin(i * 0.8) ** 2 * 70}%` }}
-              />
-            ))}
+          <div className="login-preview" aria-hidden="true">
+            <div className="preview-top">
+              <span>
+                <i /> 标注工作空间
+              </span>
+              <Scissors size={16} />
+            </div>
+            <div className="preview-frame">
+              <Play size={32} fill="currentColor" />
+              <span>每一个片段，都有意义</span>
+            </div>
+            <div className="preview-ruler">
+              <span>00:00</span>
+              <span>00:15</span>
+              <span>00:30</span>
+              <span>00:45</span>
+            </div>
+            <div className="preview-track">
+              <i />
+              <i />
+              <i />
+              <b />
+            </div>
+            <div className="preview-bottom">
+              <span>
+                <Scissors size={14} /> 精确到毫秒
+              </span>
+              <span>记录 · 标注 · 交付</span>
+            </div>
           </div>
           <span className="story-caption">VIDEO ANNOTATION PLATFORM · 01</span>
         </div>
@@ -95,13 +115,23 @@ export function Login({ initialError }: { initialError?: unknown } = {}) {
               />
             </Field>
             <Field label="密码">
-              <input
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                placeholder="输入密码"
-              />
+              <span className="password-input">
+                <input
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  placeholder="输入密码"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  aria-pressed={showPassword}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </span>
             </Field>
             <ErrorMessage error={error || initialError} />
             <button className="primary full" disabled={busy}>
@@ -109,92 +139,9 @@ export function Login({ initialError }: { initialError?: unknown } = {}) {
               <ArrowRight size={17} />
             </button>
           </form>
-          <p className="login-note">
-            账号由平台管理员创建。首次登录需修改临时密码。
-          </p>
+          <p className="login-note">账号由平台管理员创建。</p>
         </div>
         <footer>费曼智核 · 视频片段标注平台</footer>
-      </section>
-    </main>
-  );
-}
-export function PasswordChange({
-  onLogoutError,
-}: { onLogoutError?: (error: unknown) => void } = {}) {
-  const [error, setError] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
-  return (
-    <main className="password-page">
-      <section className="panel password-panel">
-        <ShieldCheck size={32} />
-        <h1>设置你的新密码</h1>
-        <p className="muted">首次登录请修改管理员设置的临时密码。</p>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            if (fd.get("newPassword") !== fd.get("confirm")) {
-              setError(new Error("两次输入的新密码不一致"));
-              return;
-            }
-            setBusy(true);
-            setError(undefined);
-            try {
-              await changePassword(
-                String(fd.get("currentPassword")),
-                String(fd.get("newPassword")),
-              );
-            } catch (err) {
-              setError(err);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <Field label="当前临时密码">
-            <input
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          <Field label="新密码">
-            <input
-              name="newPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-            />
-          </Field>
-          <Field label="确认新密码">
-            <input
-              name="confirm"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-            />
-          </Field>
-          <p className="hint">至少 6 位，包含大写、小写、数字和符号。</p>
-          <ErrorMessage error={error} />
-          <button className="primary full" disabled={busy}>
-            {busy ? "正在更新…" : "更新密码并继续"}
-          </button>
-          <button
-            className="full"
-            type="button"
-            onClick={() => {
-              logout().catch((e) => {
-                setError(e);
-                onLogoutError?.(e);
-              });
-            }}
-          >
-            退出登录
-          </button>
-        </form>
       </section>
     </main>
   );
@@ -231,8 +178,6 @@ export default function App() {
       </div>
     );
   if (!session) return <Login initialError={logoutError || restoreError} />;
-  if (session.user.mustChangePassword)
-    return <PasswordChange onLogoutError={setLogoutError} />;
   const admin = session.user.role === "PlatformAdmin";
   const navigation = [
     {
@@ -250,6 +195,9 @@ export default function App() {
   ];
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        跳转到主要内容
+      </a>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
@@ -262,25 +210,35 @@ export default function App() {
         <div className="workspace-label">
           {admin ? "平台管理空间" : "标注工作空间"}
         </div>
-        <nav>
+        <nav aria-label="主导航">
           {navigation.map((item) => (
             <button
               className={nav === item.id ? "active" : ""}
+              aria-current={nav === item.id ? "page" : undefined}
               key={item.id}
               onClick={() => setNav(item.id)}
             >
-              <item.icon size={19} />
+              <item.icon size={19} aria-hidden="true" />
               {item.label}
               {nav === item.id && <span className="nav-dot" />}
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <div className="sidebar-guide">
+            <Scissors size={19} aria-hidden="true" />
+            <strong>让专注，回到内容</strong>
+            <p>
+              选取片段，记录细节。
+              <br />
+              每一次标注都更进一步。
+            </p>
+          </div>
           <div className="system-status">
             <i />
             工作空间已连接
           </div>
-          <p>精准，始于每一个片段。</p>
+          <p>FEYNMAN CORE · 视频标注平台</p>
         </div>
       </aside>
       <div className="main-shell">
@@ -299,6 +257,7 @@ export default function App() {
             </div>
             <button
               aria-label="退出登录"
+              title="退出登录"
               onClick={async () => {
                 try {
                   await logout();
@@ -311,7 +270,7 @@ export default function App() {
             </button>
           </div>
         </header>
-        <main className="content">
+        <main className="content" id="main-content" tabIndex={-1}>
           <ErrorMessage error={logoutError} />
           {nav === "tasks" ? (
             <Tasks user={session.user} />

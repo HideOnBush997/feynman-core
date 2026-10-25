@@ -20,7 +20,7 @@ public sealed class AuthService(AppDbContext db, UserManager<ApplicationUser> us
     public const string RefreshCookie = "feynman_refresh";
     public const string CsrfCookie = "feynman_csrf";
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
-    public static UserDto ToDto(ApplicationUser user) => new(user.Id, user.UserName!, user.Role, user.TenantId, user.MustChangePassword);
+    public static UserDto ToDto(ApplicationUser user) => new(user.Id, user.UserName!, user.Role, user.TenantId, false);
 
     public async Task<ApplicationUser> GetActiveUserAsync(HttpContext context, CancellationToken ct = default)
     {

@@ -3,6 +3,7 @@ export interface User {
   username: string;
   role: "PlatformAdmin" | "Annotator";
   tenantId: string | null;
+  tenantName?: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
 }

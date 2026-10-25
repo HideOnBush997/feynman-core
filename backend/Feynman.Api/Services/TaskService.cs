@@ -79,7 +79,7 @@ public sealed class TaskService(AppDbContext db, BusinessService business)
             q = mode == "available" ? q.Where(t => t.Status == TaskStates.Available) :
                 q.Where(t => t.AssigneeUserId == actor.Id && (t.Status == TaskStates.Claimed || t.Status == TaskStates.Correction || t.Status == TaskStates.Submitted));
         }
-        else if (Guid.TryParse(h.Request.Query["tenantId"], out var tenant)) q = q.Where(t => t.TenantId == tenant);
+        else if (BusinessService.GuidFilter(h, "tenantId") is Guid tenant) q = q.Where(t => t.TenantId == tenant);
         if (h.Request.Query["name"].FirstOrDefault() is { Length: > 0 } name) q = q.Where(t => t.Name.Contains(name));
         if (h.Request.Query["status"].FirstOrDefault() is { Length: > 0 } status) q = q.Where(t => t.Status == status);
         if (bool.TryParse(h.Request.Query["overdue"], out var overdue)) q = q.Where(t => (t.DueAtUtc != null && t.DueAtUtc < DateTime.UtcNow) == overdue);

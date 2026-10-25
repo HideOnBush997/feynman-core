@@ -101,7 +101,7 @@ public sealed class DatabaseTests : IAsyncLifetime
         Assert.Single(await db.Tenants.ToListAsync());
         Assert.Single(await db.Tasks.ToListAsync());
         Assert.Equal(originalHash, (await users.FindByNameAsync("demo.admin"))!.PasswordHash);
-        Assert.All(await db.Users.ToListAsync(), x => Assert.True(x.MustChangePassword));
+        Assert.All(await db.Users.ToListAsync(), x => Assert.False(x.MustChangePassword));
     }
 
     [Fact]
